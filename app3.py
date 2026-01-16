@@ -117,16 +117,16 @@ st.markdown(f"""
     
     .h2-production-box {{
         position: relative;
-        background: #ffffff;
+        background: linear-gradient(135deg, #1b222b 0%, #141a22 100%);
         display: inline-block;
         width: fit-content;
         min-width: 220px;
         max-width: 320px;
         padding: 16px 18px;
         border-radius: 12px;
-        border: 1px solid #e6e9ef;
+        border: 1px solid rgba(167, 215, 48, 0.15);
         margin: 15px 0;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.35);
         text-align: left;
         overflow: hidden;
     }}
@@ -152,7 +152,7 @@ st.markdown(f"""
     .h2-required-value {{
         font-size: 28px;
         font-weight: 700;
-        color: {DARK_GREY};
+        color: {PLOT_BG};
         line-height: 1.1;
     }}
 
@@ -173,7 +173,7 @@ st.markdown(f"""
 # =============================================================================
 
 WATER_TYPE_CONCENTRATIONS = {
-    "PURIFIED WATER": {
+    "DISTILLED WATER": {
         "Chloride": 0.0, "Bromide": 0.0, "Iodide": 0.0, "Sulphide": 0.0,
         "Cyanide": 0.0, "Nitrate": 0.0, "Nitrite": 0.0, "Ammonium": 0.0
     },
@@ -308,7 +308,7 @@ def analyze_combination(water_sources, escalation_levels):
     - analyte_results: breakdown per analyte
     - safety_score: higher = safer (worst-case safety factor, capped)
     - worst_analyte: the analyte closest to or exceeding limit
-    - required_dilution: how much purified water needed if not safe
+    - required_dilution: how much distilled water needed if not safe
     """
     results = {
         "overall_status": "safe",
@@ -414,7 +414,7 @@ def get_status_color(status):
 
 # Initialize session state
 if "water_entries" not in st.session_state:
-    st.session_state.water_entries = [{"type": None, "volume": 0.0}]
+    st.session_state.water_entries = [{"type": None, "volume": None}]
 
 if "analysis_results" not in st.session_state:
     st.session_state.analysis_results = None
@@ -545,13 +545,13 @@ st.markdown(f"""
         <strong>How it works:</strong> Add your available water sources and volumes in Liters. 
         The system ranks all combinations by safety and shows if you have enough water for your H2 target.
         <br><br>
-        <strong>Tip:</strong> Add "PURIFIED WATER" as a source to see how dilution improves your blends.
+        <strong>Tip:</strong> Add "DISTILLED WATER" as a source to see how dilution improves your blends.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
 # Water type options
-priority_types = ["RAIN WATER", "TAP WATER (CARDIFF)", "PURIFIED WATER"]
+priority_types = ["RAIN WATER", "TAP WATER (CARDIFF)", "DISTILLED WATER"]
 water_type_options = [t for t in priority_types if t in WATER_TYPE_CONCENTRATIONS]
 water_type_options += [k for k in WATER_TYPE_CONCENTRATIONS.keys() if k not in water_type_options]
 
@@ -579,14 +579,15 @@ for i, entry in enumerate(st.session_state.water_entries):
             st.session_state.water_entries[i]["type"] = None
     
     with col2:
+        volume_value = entry["volume"] if entry["volume"] not in (None, 0.0) else None
         volume = st.number_input(
             f"Volume (Liters)",
             min_value=0.0,
-            value=entry["volume"],
+            value=volume_value,
             format="%.2f",
             key=f"volume_{i}",
             label_visibility="collapsed",
-            placeholder="Volume in Liters"
+            placeholder="Enter volume (L)"
         )
         st.session_state.water_entries[i]["volume"] = volume
     
@@ -601,7 +602,7 @@ col_add, col_analyze, col_clear = st.columns([1, 1, 1])
 
 with col_add:
     if st.button("Add Water Source", use_container_width=True):
-        st.session_state.water_entries.append({"type": None, "volume": 0.0})
+        st.session_state.water_entries.append({"type": None, "volume": None})
         st.rerun()
 
 with col_analyze:
@@ -609,7 +610,7 @@ with col_analyze:
 
 with col_clear:
     if st.button("Clear All", use_container_width=True):
-        st.session_state.water_entries = [{"type": None, "volume": 0.0}]
+        st.session_state.water_entries = [{"type": None, "volume": None}]
         st.session_state.analysis_results = None
         st.rerun()
 
@@ -617,13 +618,13 @@ with col_clear:
 if analyze_clicked:
     valid_entries = [
         e for e in st.session_state.water_entries
-        if e["type"] is not None and e["volume"] > 0
+        if e["type"] is not None and (e["volume"] or 0) > 0
     ]
     
     if len(valid_entries) == 0:
         st.warning("Please add at least one water source with a volume greater than 0.")
     else:
-        total_available = sum(e["volume"] for e in valid_entries)
+        total_available = sum(e["volume"] or 0 for e in valid_entries)
         
         # Get all combinations
         all_combinations = get_all_combinations(valid_entries, max_combo_size)
@@ -780,7 +781,7 @@ if st.session_state.analysis_results:
                     if result['required_dilution'] > 1:
                         st.markdown(f"**Dilution Required:** {result['required_dilution']:.1f}x")
                         pure_water_needed = result['total_volume'] * (result['required_dilution'] - 1)
-                        st.markdown(f"Add **{pure_water_needed:.1f}L purified water** to make safe")
+                        st.markdown(f"Add **{pure_water_needed:.1f}L distilled water** to make safe")
                     else:
                         st.markdown(f"**No dilution needed**")
                 
