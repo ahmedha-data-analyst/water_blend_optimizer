@@ -117,16 +117,16 @@ st.markdown(f"""
     
     .h2-production-box {{
         position: relative;
-        background: linear-gradient(135deg, #1b222b 0%, #141a22 100%);
+        background: #1b222b;
         display: inline-block;
         width: fit-content;
         min-width: 220px;
         max-width: 320px;
         padding: 16px 18px;
         border-radius: 12px;
-        border: 1px solid rgba(167, 215, 48, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         margin: 15px 0;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         text-align: left;
         overflow: hidden;
     }}
@@ -145,7 +145,7 @@ st.markdown(f"""
         font-size: 11px;
         letter-spacing: 1.4px;
         text-transform: uppercase;
-        color: {LIGHT_GREY};
+        color: #ffffff;
         margin-bottom: 8px;
     }}
 
@@ -159,7 +159,7 @@ st.markdown(f"""
     .h2-required-unit {{
         font-size: 14px;
         font-weight: 600;
-        color: {LIGHT_GREY};
+        color: #ffffff;
         margin-left: 8px;
     }}
 </style>
@@ -188,6 +188,10 @@ WATER_TYPE_CONCENTRATIONS = {
     "FINAL SEWAGE EFFLUENT": {
         "Chloride": 94.3, "Bromide": 0.119, "Iodide": 0.003, "Sulphide": 0.017,
         "Cyanide": 0.005, "Nitrate": 14.0, "Nitrite": 0.2, "Ammonium": 0.82
+    },
+    "Yeo Valley (Final Effluent)": {
+        "Chloride": 36.1, "Bromide": 0.0, "Iodide": 0.0, "Sulphide": 0.0,
+        "Cyanide": 0.0, "Nitrate": 0.0, "Nitrite": 0.0, "Ammonium": 1.05
     },
     "CRUDE SEWAGE": {
         "Chloride": 180.0, "Bromide": 0.0, "Iodide": 0.0, "Sulphide": 0.016,
@@ -551,7 +555,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Water type options
-priority_types = ["RAIN WATER", "TAP WATER (CARDIFF)", "DISTILLED WATER"]
+priority_types = ["RAIN WATER", "TAP WATER (CARDIFF)", "Yeo Valley (Final Effluent)", "DISTILLED WATER"]
 water_type_options = [t for t in priority_types if t in WATER_TYPE_CONCENTRATIONS]
 water_type_options += [k for k in WATER_TYPE_CONCENTRATIONS.keys() if k not in water_type_options]
 
