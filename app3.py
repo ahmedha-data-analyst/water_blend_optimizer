@@ -525,7 +525,7 @@ with col_h2_info:
     st.markdown(f"""
     <div style='display:flex; align-items:flex-start; justify-content:flex-start;'>
         <div class='h2-production-box'>
-            <div class='h2-required-label'>Water Required</div>
+            <div class='h2-required-label'>Total electrolyte Required</div>
             <div class='h2-required-value'>
                 {water_required:.1f}<span class='h2-required-unit'>Liters</span>
             </div>
