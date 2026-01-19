@@ -14,15 +14,16 @@ TEXT_BLACK = "#000000"
 # Status colors
 STATUS_GREEN = "#4CAF50"
 STATUS_RED = "#F44336"
+STATUS_ORANGE = "#FF9800"
 
 # B9 Electrolyte dilution factor (30% B9 means 70% wastewater)
 B9_DILUTION_FACTOR = 0.7
 
-# Water to Hydrogen conversion: 12.6 liters of water per 1 kg of H2 (40% efficiency assumption)
-WATER_PER_KG_H2 = 12.6
+# Total electrolyte volume per 1 kg of H2 (includes B9 portion, 40% efficiency assumption)
+ELECTROLYTE_PER_KG_H2 = 12.6
 
 # Maximum water sources to combine
-MAX_COMBINATION_SIZE = 4
+MAX_COMBINATION_SIZE = 5
 
 # Page configuration
 st.set_page_config(
@@ -115,6 +116,22 @@ st.markdown(f"""
         margin: 10px 0;
     }}
     
+    .success-box {{
+        background-color: #e8f5e9;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid {STATUS_GREEN};
+        margin: 15px 0;
+    }}
+    
+    .error-box {{
+        background-color: #ffebee;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid {STATUS_RED};
+        margin: 15px 0;
+    }}
+    
     .h2-production-box {{
         position: relative;
         background: #1b222b;
@@ -161,6 +178,77 @@ st.markdown(f"""
         font-weight: 600;
         color: #ffffff;
         margin-left: 8px;
+    }}
+
+    .h2-required-breakdown {{
+        font-size: 12px;
+        color: #ffffff;
+        margin-top: 6px;
+    }}
+    
+    .recipe-card {{
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin: 20px 0;
+        border: 2px solid {PRIMARY_GREEN};
+    }}
+    
+    .recipe-title {{
+        color: {SECONDARY_GREEN};
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        font-family: 'Hind', sans-serif;
+    }}
+    
+    .ingredient-item {{
+        background-color: white;
+        padding: 12px 15px;
+        border-radius: 8px;
+        margin: 8px 0;
+        border-left: 4px solid {PRIMARY_GREEN};
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }}
+    
+    .ingredient-volume {{
+        font-size: 20px;
+        font-weight: 700;
+        color: {DARK_GREY};
+    }}
+    
+    .ingredient-type {{
+        font-size: 14px;
+        color: {LIGHT_GREY};
+    }}
+
+    .recipe-step {{
+        background-color: #f1f3f5;
+        padding: 12px 15px;
+        border-radius: 10px;
+        margin: 12px 0;
+        border-left: 4px solid {SECONDARY_GREEN};
+    }}
+
+    .step-title {{
+        font-size: 16px;
+        font-weight: 700;
+        color: {DARK_GREY};
+        margin-bottom: 6px;
+    }}
+
+    .step-detail {{
+        font-size: 14px;
+        color: {DARK_GREY};
+    }}
+    
+    .dilution-warning {{
+        background-color: #fff8e1;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid {STATUS_ORANGE};
+        margin: 15px 0;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -265,10 +353,7 @@ NEUTRAL_ESCALATION_LEVELS = {
 def calculate_blend_concentration(water_sources, analyte):
     """
     Calculate weighted average concentration for an analyte across water sources.
-    
     Formula: C_blend = (C1 x V1 + C2 x V2 + ...) / (V1 + V2 + ...)
-    
-    None values are treated as 0.
     """
     total_mass = 0.0
     total_volume = 0.0
@@ -276,7 +361,7 @@ def calculate_blend_concentration(water_sources, analyte):
     for water_type, volume in water_sources:
         conc = WATER_TYPE_CONCENTRATIONS[water_type].get(analyte, 0.0)
         if conc is None:
-            conc = 0.0  # Treat missing data as 0
+            conc = 0.0
         total_mass += conc * volume
         total_volume += volume
     
@@ -287,17 +372,12 @@ def calculate_blend_concentration(water_sources, analyte):
 
 
 def apply_b9_dilution(concentration):
-    """
-    Apply 30% B9 electrolyte dilution.
-    Final = Blend x 0.7
-    """
+    """Apply 30% B9 electrolyte dilution. Final = Blend x 0.7"""
     return concentration * B9_DILUTION_FACTOR
 
 
 def get_status(final_concentration, escalation_level):
-    """
-    Determine status: SAFE if below escalation level, otherwise ESCALATION.
-    """
+    """Determine status: SAFE if below escalation level, otherwise ESCALATION."""
     if final_concentration >= escalation_level:
         return "escalation"
     return "safe"
@@ -306,13 +386,7 @@ def get_status(final_concentration, escalation_level):
 def analyze_combination(water_sources, escalation_levels):
     """
     Analyze a water source combination against escalation levels.
-    
-    Returns dict with:
-    - overall_status: "safe" or "escalation"
-    - analyte_results: breakdown per analyte
-    - safety_score: higher = safer (worst-case safety factor, capped)
-    - worst_analyte: the analyte closest to or exceeding limit
-    - required_dilution: how much distilled water needed if not safe
+    Returns dict with overall status, analyte results, and safety metrics.
     """
     results = {
         "overall_status": "safe",
@@ -327,7 +401,7 @@ def analyze_combination(water_sources, escalation_levels):
     worst_analyte = None
     max_dilution_needed = 1.0
     dilution_limiting_analyte = None
-    ratio_cap = 100.0  # Keep scores readable and comparable
+    ratio_cap = 100.0
     
     for analyte, limit in escalation_levels.items():
         blend_conc = calculate_blend_concentration(water_sources, analyte)
@@ -348,24 +422,18 @@ def analyze_combination(water_sources, escalation_levels):
             results["limiting_analytes"].append((analyte, final_conc, limit))
             results["overall_status"] = "escalation"
         
-        # Calculate safety factor (limit / concentration); lower is worse
         if final_conc > 0:
             ratio = limit / final_conc
-            
             if ratio < worst_ratio:
                 worst_ratio = ratio
                 worst_analyte = analyte
             
-            # Check if dilution needed
             if final_conc > limit:
                 dilution = final_conc / limit
                 if dilution > max_dilution_needed:
                     max_dilution_needed = dilution
                     dilution_limiting_analyte = analyte
-        else:
-            pass  # Zero concentration does not penalize the worst-case score
     
-    # Safety score is the worst-case safety factor, capped for display stability
     results["safety_score"] = ratio_cap if worst_ratio == float('inf') else min(worst_ratio, ratio_cap)
     results["worst_analyte"] = worst_analyte
     results["worst_ratio"] = ratio_cap if worst_ratio == float('inf') else worst_ratio
@@ -376,9 +444,7 @@ def analyze_combination(water_sources, escalation_levels):
 
 
 def get_all_combinations(water_entries, max_size):
-    """
-    Generate all combinations from 1 source up to max_size sources.
-    """
+    """Generate all combinations from 1 source up to max_size sources."""
     all_combos = []
     n = len(water_entries)
     
@@ -391,15 +457,9 @@ def get_all_combinations(water_entries, max_size):
 
 
 def sort_results(results):
-    """
-    Sort results by:
-    1. Status (SAFE first, then ESCALATION)
-    2. Safety score (higher is better)
-    """
+    """Sort results by: 1. Status (SAFE first), 2. Safety score (higher is better)"""
     def sort_key(r):
-        # SAFE = 0, ESCALATION = 1 (lower is better)
         status_priority = 0 if r["overall_status"] == "safe" else 1
-        # Negate safety score so higher scores come first
         return (status_priority, -r["safety_score"])
     
     return sorted(results, key=sort_key)
@@ -410,6 +470,35 @@ def get_status_color(status):
     if status == "safe":
         return STATUS_GREEN
     return STATUS_RED
+
+
+def rank_water_sources(water_entries, escalation_levels):
+    """Rank sources by safety (safe first, higher safety score first)."""
+    ranked = []
+    for entry in water_entries:
+        analysis = analyze_combination([(entry["type"], 1.0)], escalation_levels)
+        ranked.append({
+            "type": entry["type"],
+            "available_volume": entry["volume"],
+            "overall_status": analysis["overall_status"],
+            "safety_score": analysis["safety_score"]
+        })
+    ranked.sort(key=lambda item: (0 if item["overall_status"] == "safe" else 1, -item["safety_score"]))
+    return ranked
+
+
+def build_blend_from_ranking(ranked_sources, required_volume):
+    """Fill the required volume using the safest sources first."""
+    selected = []
+    remaining = required_volume
+    for source in ranked_sources:
+        if remaining <= 0:
+            break
+        use_volume = min(source["available_volume"], remaining)
+        if use_volume > 0:
+            selected.append((source["type"], use_volume))
+            remaining -= use_volume
+    return selected, remaining
 
 
 # =============================================================================
@@ -438,7 +527,7 @@ with col_title:
     st.markdown(f"""
     <div>
         <h1 style='color:{PRIMARY_GREEN}; margin-bottom:0; font-family:Hind;'>Water Blend Optimizer</h1>
-        <p style='color:{LIGHT_GREY}; font-family:Hind;'>Find optimal water combinations for green hydrogen production</p>
+        <p style='color:{LIGHT_GREY}; font-family:Hind;'>Find the optimal water blend for green hydrogen production</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -456,24 +545,6 @@ with st.sidebar:
     )
     
     escalation_levels = ALKALINE_ESCALATION_LEVELS if ph_type == "Alkaline pH" else NEUTRAL_ESCALATION_LEVELS
-    
-    st.markdown("---")
-    
-    max_combo_size = st.slider(
-        "Max water sources per blend",
-        min_value=1,
-        max_value=5,
-        value=4,
-        help="Maximum number of water sources to combine"
-    )
-    
-    top_n_results = st.slider(
-        "Show top N results",
-        min_value=5,
-        max_value=50,
-        value=20,
-        help="Number of best combinations to display"
-    )
     
     st.markdown("---")
     
@@ -523,15 +594,20 @@ with col_h2_input:
     )
     st.session_state.h2_target = h2_target
 
-water_required = h2_target * WATER_PER_KG_H2
+total_electrolyte_required = h2_target * ELECTROLYTE_PER_KG_H2
+water_required = total_electrolyte_required * B9_DILUTION_FACTOR
+b9_required = total_electrolyte_required - water_required
 
 with col_h2_info:
     st.markdown(f"""
     <div style='display:flex; align-items:flex-start; justify-content:flex-start;'>
         <div class='h2-production-box'>
-            <div class='h2-required-label'>Total electrolyte Required</div>
+            <div class='h2-required-label'>Total Electrolyte Required</div>
             <div class='h2-required-value'>
-                {water_required:.1f}<span class='h2-required-unit'>Liters</span>
+                {total_electrolyte_required:.1f}<span class='h2-required-unit'>Liters</span>
+            </div>
+            <div class='h2-required-breakdown'>
+                Water portion: {water_required:.1f} L | B9 portion: {b9_required:.1f} L
             </div>
         </div>
     </div>
@@ -547,9 +623,8 @@ st.markdown(f"""
 <div class='info-box'>
     <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
         <strong>How it works:</strong> Add your available water sources and volumes in Liters. 
-        The system ranks all combinations by safety and shows if you have enough water for your H2 target.
-        <br><br>
-        <strong>Tip:</strong> Add "DISTILLED WATER" as a source to see how dilution improves your blends.
+        The system ranks your sources by safety, fills the required water volume from the safest sources,
+        and then tells you exactly how much B9 (and any extra distilled water) to add.
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -605,12 +680,12 @@ for i, entry in enumerate(st.session_state.water_entries):
 col_add, col_analyze, col_clear = st.columns([1, 1, 1])
 
 with col_add:
-    if st.button("Add Water Source", use_container_width=True):
+    if st.button("+ Add Water Source", use_container_width=True):
         st.session_state.water_entries.append({"type": None, "volume": None})
         st.rerun()
 
 with col_analyze:
-    analyze_clicked = st.button("Analyze Combinations", type="primary", use_container_width=True)
+    analyze_clicked = st.button("Find Optimal Blend", type="primary", use_container_width=True)
 
 with col_clear:
     if st.button("Clear All", use_container_width=True):
@@ -629,30 +704,23 @@ if analyze_clicked:
         st.warning("Please add at least one water source with a volume greater than 0.")
     else:
         total_available = sum(e["volume"] or 0 for e in valid_entries)
-        
-        # Get all combinations
-        all_combinations = get_all_combinations(valid_entries, max_combo_size)
-        
-        # Analyze each combination - ONLY keep those that meet the H2 target
+
+        ranked_sources = rank_water_sources(valid_entries, escalation_levels)
+        selected_sources, remaining_volume = build_blend_from_ranking(ranked_sources, water_required)
+
         results = []
-        for combo in all_combinations:
-            analysis = analyze_combination(combo, escalation_levels)
-            analysis["water_sources"] = combo
-            
-            # Only include combinations that meet the required volume
-            if analysis["total_volume"] >= water_required:
-                analysis["meets_h2_target"] = True
-                results.append(analysis)
-        
-        # Sort: SAFE first, then by safety score (descending)
-        results = sort_results(results)
-        
+        if remaining_volume <= 1e-6:
+            analysis = analyze_combination(selected_sources, escalation_levels)
+            analysis["water_sources"] = selected_sources
+            results.append(analysis)
+
         st.session_state.analysis_results = {
             "results": results,
             "total_available": total_available,
             "water_required": water_required,
+            "electrolyte_required": total_electrolyte_required,
+            "b9_required": b9_required,
             "h2_target": h2_target,
-            "total_combinations_checked": len(all_combinations)
         }
 
 # Display results
@@ -661,146 +729,193 @@ if st.session_state.analysis_results:
     results = data["results"]
     total_available = data["total_available"]
     water_required = data["water_required"]
+    total_electrolyte_required = data["electrolyte_required"]
+    b9_required = data["b9_required"]
     h2_target_display = data["h2_target"]
-    total_checked = data.get("total_combinations_checked", 0)
     
     st.markdown("---")
-    st.markdown(f"<h2 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Analysis Results</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Your Optimal Blend Recipe</h2>", unsafe_allow_html=True)
     
-    # Water availability check
+    # Check if we have insufficient water
     if total_available < water_required:
         st.markdown(f"""
-        <div class='warning-box'>
+        <div class='error-box'>
+            <h3 style='color:{STATUS_RED}; margin-top:0;'>Insufficient Water Available</h3>
             <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
-                <strong>Insufficient Water:</strong> You have {total_available:.1f}L available but need {water_required:.1f}L 
-                to produce {h2_target_display:.0f} kg H2.
-                <br>Shortfall: {water_required - total_available:.1f}L
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div class='info-box'>
-            <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
-                <strong>Sufficient Water:</strong> You have {total_available:.1f}L available. 
-                Need {water_required:.1f}L to produce {h2_target_display:.0f} kg H2.
+                You have <strong>{total_available:.1f}L</strong> available but need <strong>{water_required:.1f}L</strong> 
+                of water (70% of the <strong>{total_electrolyte_required:.1f}L</strong> total electrolyte)
+                to produce <strong>{h2_target_display:.0f} kg H2</strong>.
+                <br><br>
+                <strong>Shortfall:</strong> {water_required - total_available:.1f}L
+                <br><br>
+                Please add more water sources or reduce your hydrogen production target.
             </p>
         </div>
         """, unsafe_allow_html=True)
     
-    # Check if any combinations meet the target
-    if len(results) == 0:
+    # Check if a blend could be built
+    elif len(results) == 0:
         st.markdown(f"""
-        <div class='warning-box'>
+        <div class='error-box'>
+            <h3 style='color:{STATUS_RED}; margin-top:0;'>No Valid Blend Found</h3>
             <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
-                <strong>No Valid Combinations:</strong> None of the {total_checked} possible combinations 
-                provide enough volume ({water_required:.1f}L) to meet your H2 target.
+                We could not build a full blend with the volumes provided.
+                The target water volume is <strong>{water_required:.1f}L</strong>.
                 <br><br>
-                Try adding more water sources or increasing the "Max water sources per blend" in the sidebar.
+                Please add more water sources or increase the volumes available.
             </p>
         </div>
         """, unsafe_allow_html=True)
+    
     else:
-        # Summary counts
-        safe_combos = [r for r in results if r["overall_status"] == "safe"]
-        escalation_combos = [r for r in results if r["overall_status"] == "escalation"]
+        # Get the best (safest) result - it's already sorted, so take the first one
+        best_result = results[0]
+        is_safe = best_result["overall_status"] == "safe"
+
+        water_blend_volume = best_result["total_volume"]
+        b9_volume = b9_required
+        total_after_b9 = total_electrolyte_required
+        needs_dilution = best_result["required_dilution"] > 1
+        distilled_water_needed = total_after_b9 * (best_result["required_dilution"] - 1) if needs_dilution else 0.0
+        total_after_dilution = total_after_b9 + distilled_water_needed
         
-        col1, col2, col3 = st.columns(3)
+        # Status Banner
+        if is_safe:
+            st.markdown(f"""
+            <div class='success-box'>
+                <h3 style='color:{STATUS_GREEN}; margin-top:0;'>Safe Blend Found</h3>
+                <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
+                    This is the <strong>safest blend</strong> for your inputs. Follow the steps below to prepare it.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class='error-box'>
+                <h3 style='color:{STATUS_RED}; margin-top:0;'>Dilution Required</h3>
+                <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
+                    This is the <strong>safest available blend</strong>, but it needs additional distilled water to meet safety limits.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        recipe_lines = [
+            "<div class='recipe-card'>",
+            "<div class='recipe-title'>Optimal Blend Recipe</div>",
+            "<div class='recipe-step'>",
+            "<div class='step-title'>Step 1 - Measure your water sources</div>",
+            "<div class='step-detail'>",
+            (
+                "Use these volumes to make "
+                f"{water_blend_volume:.1f} L of water for your {h2_target_display:.0f} kg H2 target "
+                f"(70% of the {total_electrolyte_required:.1f} L total electrolyte):"
+            ),
+            "</div>",
+        ]
+        for water_type, volume in best_result["water_sources"]:
+            recipe_lines.append(
+                "<div class='ingredient-item'>"
+                f"<span class='ingredient-volume'>{volume:.1f} L</span>"
+                f"<span class='ingredient-type'> - {water_type}</span>"
+                "</div>"
+            )
+        recipe_lines += [
+            "</div>",
+            "<div class='recipe-step'>",
+            "<div class='step-title'>Step 2 - Add B9 electrolyte</div>",
+            "<div class='step-detail'>",
+            f"Add <strong>{b9_volume:.1f} L</strong> of B9 (30% of total electrolyte).",
+            f"<br>Total electrolyte after B9: <strong>{total_after_b9:.1f} L</strong>",
+            "</div>",
+            "</div>",
+        ]
+        if needs_dilution:
+            recipe_lines += [
+                "<div class='recipe-step'>",
+                "<div class='step-title'>Step 3 - Dilute to safe limits</div>",
+                "<div class='step-detail'>",
+                f"Add <strong>{distilled_water_needed:.1f} L</strong> additional distilled water to make the blend safe.",
+                f"<br>Final electrolyte volume: <strong>{total_after_dilution:.1f} L</strong>",
+                f"<br><em>Limiting analyte: {best_result.get('dilution_limiting_analyte', 'N/A')}</em>",
+                "</div>",
+                "</div>",
+            ]
+        else:
+            recipe_lines += [
+                "<div class='recipe-step'>",
+                "<div class='step-title'>Step 3 - No dilution needed</div>",
+                "<div class='step-detail'>",
+                "This blend is already within safe limits after B9.",
+                f"<br>Final electrolyte volume: <strong>{total_after_b9:.1f} L</strong>",
+                "</div>",
+                "</div>",
+            ]
+        recipe_lines.append("</div>")
+        st.markdown("\n".join(recipe_lines), unsafe_allow_html=True)
+        
+        # Summary Metrics
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
+            status_color = STATUS_GREEN if is_safe else STATUS_RED
+            status_text = "SAFE" if is_safe else "NEEDS DILUTION"
             st.markdown(f"""
-            <div style='background-color:white; padding:20px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                <p style='color:{TEXT_BLACK}; margin:0; font-family:Hind;'>Valid Combinations</p>
-                <p style='font-size:36px; font-weight:bold; color:{DARK_GREY}; margin:0; font-family:Hind;'>{len(results)}</p>
+            <div style='background-color:white; padding:15px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                <p style='color:{LIGHT_GREY}; margin:0; font-family:Hind; font-size:12px;'>STATUS</p>
+                <p style='font-size:18px; font-weight:bold; color:{status_color}; margin:5px 0 0 0; font-family:Hind;'>{status_text}</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
             st.markdown(f"""
-            <div style='background-color:white; padding:20px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                <p style='color:{TEXT_BLACK}; margin:0; font-family:Hind;'>Safe</p>
-                <p style='font-size:36px; font-weight:bold; color:{STATUS_GREEN}; margin:0; font-family:Hind;'>{len(safe_combos)}</p>
+            <div style='background-color:white; padding:15px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                <p style='color:{LIGHT_GREY}; margin:0; font-family:Hind; font-size:12px;'>WATER PORTION</p>
+                <p style='font-size:18px; font-weight:bold; color:{DARK_GREY}; margin:5px 0 0 0; font-family:Hind;'>{water_blend_volume:.1f} L</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col3:
             st.markdown(f"""
-            <div style='background-color:white; padding:20px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                <p style='color:{TEXT_BLACK}; margin:0; font-family:Hind;'>Escalation</p>
-                <p style='font-size:36px; font-weight:bold; color:{STATUS_RED}; margin:0; font-family:Hind;'>{len(escalation_combos)}</p>
+            <div style='background-color:white; padding:15px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                <p style='color:{LIGHT_GREY}; margin:0; font-family:Hind; font-size:12px;'>B9 ELECTROLYTE</p>
+                <p style='font-size:18px; font-weight:bold; color:{SECONDARY_GREEN}; margin:5px 0 0 0; font-family:Hind;'>{b9_volume:.1f} L</p>
             </div>
             """, unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        with col4:
+            distilled_display = f"{distilled_water_needed:.1f} L" if needs_dilution else "0.0 L"
+            st.markdown(f"""
+            <div style='background-color:white; padding:15px; border-radius:10px; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                <p style='color:{LIGHT_GREY}; margin:0; font-family:Hind; font-size:12px;'>DISTILLED WATER</p>
+                <p style='font-size:18px; font-weight:bold; color:{DARK_GREY}; margin:5px 0 0 0; font-family:Hind;'>{distilled_display}</p>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # Results table
-        st.markdown(f"<h3 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Combinations That Meet Your {h2_target_display:.0f} kg H2 Target ({water_required:.0f}L Required)</h3>", unsafe_allow_html=True)
-        
-        table_data = []
-        for idx, result in enumerate(results[:top_n_results]):
-            sources_str = " + ".join([f"{v:.0f}L {t.split()[0]}" for t, v in result["water_sources"]])
-            if len(sources_str) > 50:
-                sources_str = sources_str[:47] + "..."
+        with st.expander("Show safety details (optional)"):
+            analyte_data = []
+            for analyte, data in best_result["analyte_results"].items():
+                status = "SAFE" if data["status"] == "safe" else "EXCEEDS LIMIT"
+                margin = ((data['escalation_level'] - data['final_concentration']) / data['escalation_level']) * 100 if data['escalation_level'] > 0 else 0
+                analyte_data.append({
+                    "Analyte": analyte,
+                    "Final Concentration (mg/L)": f"{data['final_concentration']:.4f}",
+                    "Escalation Limit (mg/L)": f"{data['escalation_level']:.4f}",
+                    "Safety Margin": f"{margin:.1f}%" if margin > 0 else "EXCEEDED",
+                    "Status": status
+                })
             
-            status_text = "SAFE" if result["overall_status"] == "safe" else "ESCALATION"
-            dilution_str = f"{result['required_dilution']:.1f}x" if result['required_dilution'] > 1 else "None"
-            h2_producible = result['total_volume'] / WATER_PER_KG_H2
+            df = pd.DataFrame(analyte_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
             
-            table_data.append({
-                "Rank": idx + 1,
-                "Status": status_text,
-                "Combination": sources_str,
-                "Volume (L)": f"{result['total_volume']:.1f}",
-                "H2 Output (kg)": f"{h2_producible:.1f}",
-                "Safety Score": f"{result['safety_score']:.1f}",
-                "Limiting Analyte": result.get("worst_analyte", "N/A") or "N/A",
-                "Dilution Needed": dilution_str
-            })
-        
-        df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        
-        # Detailed analysis
-        st.markdown(f"<h3 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Detailed Analysis</h3>", unsafe_allow_html=True)
-        
-        for idx, result in enumerate(results[:min(10, top_n_results)]):
-            sources_str = " + ".join([f"{v:.1f}L {t}" for t, v in result["water_sources"]])
-            status_text = result["overall_status"].upper()
-            h2_producible = result['total_volume'] / WATER_PER_KG_H2
-            
-            with st.expander(f"#{idx+1} | {status_text} | {h2_producible:.1f} kg H2 | {sources_str}", expanded=(idx == 0)):
-                col_a, col_b = st.columns(2)
-                
-                with col_a:
-                    st.markdown(f"**Water Sources:**")
-                    for water_type, volume in result["water_sources"]:
-                        st.markdown(f"- {water_type}: {volume:.2f} L")
-                    st.markdown(f"**Total Volume:** {result['total_volume']:.2f} L")
-                    st.markdown(f"**H2 Producible:** {h2_producible:.1f} kg")
-                
-                with col_b:
-                    st.markdown(f"**Safety Score:** {result['safety_score']:.2f}")
-                    st.markdown(f"**Limiting Analyte:** {result.get('worst_analyte', 'N/A')}")
-                    
-                    if result['required_dilution'] > 1:
-                        st.markdown(f"**Dilution Required:** {result['required_dilution']:.1f}x")
-                        pure_water_needed = result['total_volume'] * (result['required_dilution'] - 1)
-                        st.markdown(f"Add **{pure_water_needed:.1f}L distilled water** to make safe")
-                    else:
-                        st.markdown(f"**No dilution needed**")
-                
-                # Analyte breakdown table
-                st.markdown("**Analyte Breakdown:**")
-                analyte_data = []
-                for analyte, data in result["analyte_results"].items():
-                    status = "SAFE" if data["status"] == "safe" else "ESCALATION"
-                    analyte_data.append({
-                        "Analyte": analyte,
-                        "Final (mg/L)": f"{data['final_concentration']:.4f}",
-                        "Limit (mg/L)": f"{data['escalation_level']:.4f}",
-                        "Status": status
-                    })
-                st.dataframe(pd.DataFrame(analyte_data), use_container_width=True, hide_index=True)
+            if best_result.get('worst_analyte'):
+                st.markdown(f"""
+                <div class='info-box'>
+                    <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
+                        <strong>Limiting Analyte:</strong> {best_result['worst_analyte']} - This analyte has the smallest safety margin.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
