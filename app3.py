@@ -737,7 +737,8 @@ if st.session_state.analysis_results:
     st.markdown(f"<h2 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Your Optimal Blend Recipe</h2>", unsafe_allow_html=True)
     
     # Check if we have insufficient water
-    if total_available < water_required:
+    epsilon = 1e-6
+    if total_available + epsilon < water_required:
         st.markdown(f"""
         <div class='error-box'>
             <h3 style='color:{STATUS_RED}; margin-top:0;'>Insufficient Water Available</h3>
@@ -746,7 +747,7 @@ if st.session_state.analysis_results:
                 of water (70% of the <strong>{total_electrolyte_required:.1f}L</strong> total electrolyte)
                 to produce <strong>{h2_target_display:.0f} kg H2</strong>.
                 <br><br>
-                <strong>Shortfall:</strong> {water_required - total_available:.1f}L
+                <strong>Shortfall:</strong> {max(0.0, water_required - total_available):.1f}L
                 <br><br>
                 Please add more water sources or reduce your hydrogen production target.
             </p>
