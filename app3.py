@@ -368,6 +368,17 @@ NEUTRAL_ESCALATION_LEVELS = {
     "Ammonium": 2.0
 }
 
+ACIDIC_ESCALATION_LEVELS = {
+    "Chloride": 350.0,
+    "Bromide": 1.0,
+    "Iodide": 0.1,
+    "Sulphide": 0.1,
+    "Cyanide": 0.005,
+    "Nitrate": 10.0,
+    "Nitrite": 10.0,
+    "Ammonium": 1.0
+}
+
 
 def calculate_blend_concentration(water_sources, analyte):
     """
@@ -583,12 +594,21 @@ with st.sidebar:
     
     ph_type = st.selectbox(
         "Select Wastewater pH Type",
-        options=["Alkaline pH", "Neutral pH"],
+        options=[
+            "Alkaline pH (over 8)",
+            "Neutral pH (5.5 to 7.5)",
+            "Acidic pH (less than 5)"
+        ],
         index=0,
-        help="Select the wastewater pH type"
+        help="Select the wastewater pH range"
     )
     
-    escalation_levels = ALKALINE_ESCALATION_LEVELS if ph_type == "Alkaline pH" else NEUTRAL_ESCALATION_LEVELS
+    if ph_type == "Neutral pH (5.5 to 7.5)":
+        escalation_levels = NEUTRAL_ESCALATION_LEVELS
+    elif ph_type == "Acidic pH (less than 5)":
+        escalation_levels = ACIDIC_ESCALATION_LEVELS
+    else:
+        escalation_levels = ALKALINE_ESCALATION_LEVELS
     
     st.markdown("---")
     
