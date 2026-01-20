@@ -323,6 +323,25 @@ WATER_TYPE_CONCENTRATIONS = {
     }
 }
 
+# Sludge production rates (kg per m3 of water). Provided values are exact, others are rough estimates.
+SLUDGE_PRODUCTION_KG_PER_M3 = {
+    "Yeo Valley (Final Effluent)": 0.3,
+    "RAIN WATER": 0.0015,
+    "TAP WATER (CARDIFF)": 0.023,
+    "FINAL SEWAGE EFFLUENT": 0.26,
+    "DISTILLED WATER": 0.0,
+    "CRUDE SEWAGE": 0.6,
+    "ANY SEWAGE": 0.35,
+    "ANY TRADE EFFLUENT": 0.4,
+    "TRADE EFFLUENT - FRESHWATER RETURNED ABSTRACTED": 0.22,
+    "STORM SEWER OVERFLOW DISCHARGE": 0.18,
+    "SURFACE DRAINAGE": 0.05,
+    "ANY LEACHATE": 0.9,
+    "GROUNDWATER - PURGED/PUMPED/REFILLED": 0.01,
+    "MINEWATER": 0.08,
+    "CANAL WATER": 0.03
+}
+
 # =============================================================================
 # ESCALATION LEVELS (8 analytes only)
 # =============================================================================
@@ -472,6 +491,31 @@ def get_status_color(status):
     return STATUS_RED
 
 
+def calculate_sludge_kg(water_sources):
+    """Calculate sludge production in kg for the given water sources."""
+    total_sludge = 0.0
+    breakdown = []
+    for water_type, volume in water_sources:
+        rate = SLUDGE_PRODUCTION_KG_PER_M3.get(water_type)
+        if rate is None:
+            breakdown.append({
+                "water_type": water_type,
+                "volume_l": volume,
+                "rate_kg_m3": None,
+                "sludge_kg": None
+            })
+            continue
+        sludge_kg = (volume / 1000.0) * rate
+        total_sludge += sludge_kg
+        breakdown.append({
+            "water_type": water_type,
+            "volume_l": volume,
+            "rate_kg_m3": rate,
+            "sludge_kg": sludge_kg
+        })
+    return total_sludge, breakdown
+
+
 def rank_water_sources(water_entries, escalation_levels):
     """Rank sources by safety (safe first, higher safety score first)."""
     ranked = []
@@ -574,6 +618,20 @@ with st.sidebar:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown(f"<h3 style='color:{PRIMARY_GREEN}; font-family:Hind;'>Sludge Rates</h3>", unsafe_allow_html=True)
+    sludge_rate_lines = [
+        "<div style='color:white; font-family:Hind; font-size:14px;'>",
+        "<p>Rates shown are kg per 1000 L of water</p>",
+        "<ul style='margin:0; padding-left:18px;'>"
+    ]
+    for water_type in WATER_TYPE_CONCENTRATIONS.keys():
+        rate = SLUDGE_PRODUCTION_KG_PER_M3.get(water_type)
+        rate_text = f"{rate:.4f}" if rate is not None else "N/A"
+        sludge_rate_lines.append(f"<li>{water_type}: {rate_text}</li>")
+    sludge_rate_lines += ["</ul>", "</div>"]
+    st.markdown("\n".join(sludge_rate_lines), unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown(f"<p style='color:{LIGHT_GREY}; font-size:12px; font-family:Hind;'>HydroStar Europe Ltd.</p>", unsafe_allow_html=True)
@@ -594,9 +652,10 @@ with col_h2_input:
     )
     st.session_state.h2_target = h2_target
 
-total_electrolyte_required = h2_target * ELECTROLYTE_PER_KG_H2
-water_required = total_electrolyte_required * B9_DILUTION_FACTOR
-b9_required = total_electrolyte_required - water_required
+total_electrolyte_required = round(h2_target * ELECTROLYTE_PER_KG_H2, 1)
+water_required_raw = total_electrolyte_required * B9_DILUTION_FACTOR
+water_required = round(water_required_raw, 1)
+b9_required = round(total_electrolyte_required - water_required, 1)
 
 with col_h2_info:
     st.markdown(f"""
@@ -892,6 +951,29 @@ if st.session_state.analysis_results:
                 <p style='font-size:18px; font-weight:bold; color:{DARK_GREY}; margin:5px 0 0 0; font-family:Hind;'>{distilled_display}</p>
             </div>
             """, unsafe_allow_html=True)
+
+        total_sludge_kg, sludge_breakdown = calculate_sludge_kg(best_result["water_sources"])
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Sludge Estimate</h3>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='info-box'>
+            <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
+                Estimated sludge from the water portion: <strong>{total_sludge_kg:.4f} kg</strong>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        sludge_rows = []
+        for item in sludge_breakdown:
+            rate_display = f"{item['rate_kg_m3']:.4f}" if item["rate_kg_m3"] is not None else "N/A"
+            sludge_display = f"{item['sludge_kg']:.4f}" if item["sludge_kg"] is not None else "N/A"
+            sludge_rows.append({
+                "Water Type": item["water_type"],
+                "Volume (L)": f"{item['volume_l']:.1f}",
+                "Sludge Rate (kg per 1000 L)": rate_display,
+                "Sludge (kg)": sludge_display
+            })
+        st.dataframe(pd.DataFrame(sludge_rows), use_container_width=True, hide_index=True)
         
         with st.expander("Show safety details (optional)"):
             analyte_data = []
