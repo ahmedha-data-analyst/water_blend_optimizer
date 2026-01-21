@@ -813,7 +813,7 @@ if st.session_state.analysis_results:
     h2_target_display = data["h2_target"]
     
     st.markdown("---")
-    st.markdown(f"<h2 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Your Optimal Blend Recipe</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='color:{SECONDARY_GREEN}; font-family:Hind;'>Your Optimal Blend</h2>", unsafe_allow_html=True)
     
     # Check if we have insufficient water
     epsilon = 1e-6
@@ -881,7 +881,7 @@ if st.session_state.analysis_results:
         
         recipe_lines = [
             "<div class='recipe-card'>",
-            "<div class='recipe-title'>Optimal Blend Recipe</div>",
+            "<div class='recipe-title'>Optimal Blend</div>",
             "<div class='recipe-step'>",
             "<div class='step-title'>Step 1 - Measure your water sources</div>",
             "<div class='step-detail'>",
