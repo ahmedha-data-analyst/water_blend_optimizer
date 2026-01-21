@@ -643,13 +643,12 @@ with st.sidebar:
     st.markdown(f"<h3 style='color:{PRIMARY_GREEN}; font-family:Hind;'>Sludge Rates</h3>", unsafe_allow_html=True)
     sludge_rate_lines = [
         "<div style='color:white; font-family:Hind; font-size:14px;'>",
-        "<p>Rates shown are g per 1000 L of water</p>",
+        "<p>Rates shown are kg per 1000 L of water</p>",
         "<ul style='margin:0; padding-left:18px;'>"
     ]
     for water_type in WATER_TYPE_CONCENTRATIONS.keys():
         rate = SLUDGE_PRODUCTION_KG_PER_M3.get(water_type)
-        rate_g_per_1000l = rate * 1000.0 if rate is not None else None
-        rate_text = f"{rate_g_per_1000l:.1f}" if rate_g_per_1000l is not None else "N/A"
+        rate_text = f"{rate:.4f}" if rate is not None else "N/A"
         sludge_rate_lines.append(f"<li>{water_type}: {rate_text}</li>")
     sludge_rate_lines += ["</ul>", "</div>"]
     st.markdown("\n".join(sludge_rate_lines), unsafe_allow_html=True)
@@ -980,22 +979,20 @@ if st.session_state.analysis_results:
         st.markdown(f"""
         <div class='info-box'>
             <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
-                Estimated sludge from the water portion: <strong>{total_sludge_g:.3f} g</strong>
+                Estimated sludge from the water portion: <strong>{total_sludge_kg:.4f} kg</strong>
             </p>
         </div>
         """, unsafe_allow_html=True)
 
         sludge_rows = []
         for item in sludge_breakdown:
-            rate_g_per_1000l = item["rate_kg_m3"] * 1000.0 if item["rate_kg_m3"] is not None else None
-            sludge_g = item["sludge_kg"] * 1000.0 if item["sludge_kg"] is not None else None
-            rate_display = f"{rate_g_per_1000l:.1f}" if rate_g_per_1000l is not None else "N/A"
-            sludge_display = f"{sludge_g:.3f}" if sludge_g is not None else "N/A"
+            rate_display = f"{item['rate_kg_m3']:.4f}" if item["rate_kg_m3"] is not None else "N/A"
+            sludge_display = f"{item['sludge_kg']:.4f}" if item["sludge_kg"] is not None else "N/A"
             sludge_rows.append({
                 "Water Type": item["water_type"],
                 "Volume (L)": f"{item['volume_l']:.1f}",
-                "Sludge Rate (g per 1000 L)": rate_display,
-                "Sludge (g)": sludge_display
+                "Sludge Rate (kg per 1000 L)": rate_display,
+                "Sludge (kg)": sludge_display
             })
         st.dataframe(pd.DataFrame(sludge_rows), use_container_width=True, hide_index=True)
         
