@@ -648,7 +648,7 @@ with st.sidebar:
     ]
     for water_type in WATER_TYPE_CONCENTRATIONS.keys():
         rate = SLUDGE_PRODUCTION_KG_PER_M3.get(water_type)
-        rate_text = f"{rate:.4f}" if rate is not None else "N/A"
+        rate_text = f"{rate:.6f}" if rate is not None else "N/A"
         sludge_rate_lines.append(f"<li>{water_type}: {rate_text}</li>")
     sludge_rate_lines += ["</ul>", "</div>"]
     st.markdown("\n".join(sludge_rate_lines), unsafe_allow_html=True)
@@ -979,15 +979,15 @@ if st.session_state.analysis_results:
         st.markdown(f"""
         <div class='info-box'>
             <p style='margin:0; font-family:Hind; color:{DARK_GREY};'>
-                Estimated sludge from the water portion: <strong>{total_sludge_kg:.4f} kg</strong>
+                Estimated sludge from the water portion: <strong>{total_sludge_kg:.6f} kg</strong>
             </p>
         </div>
         """, unsafe_allow_html=True)
 
         sludge_rows = []
         for item in sludge_breakdown:
-            rate_display = f"{item['rate_kg_m3']:.4f}" if item["rate_kg_m3"] is not None else "N/A"
-            sludge_display = f"{item['sludge_kg']:.4f}" if item["sludge_kg"] is not None else "N/A"
+            rate_display = f"{item['rate_kg_m3']:.6f}" if item["rate_kg_m3"] is not None else "N/A"
+            sludge_display = f"{item['sludge_kg']:.6f}" if item["sludge_kg"] is not None else "N/A"
             sludge_rows.append({
                 "Water Type": item["water_type"],
                 "Volume (L)": f"{item['volume_l']:.1f}",
