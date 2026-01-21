@@ -323,7 +323,7 @@ WATER_TYPE_CONCENTRATIONS = {
     }
 }
 
-# Sludge production rates (kg per m3 of water). Provided values are exact, others are rough estimates.
+# Sludge production rates (kg per m3 of water).
 SLUDGE_PRODUCTION_KG_PER_M3 = {
     "Yeo Valley (Final Effluent)": 0.3,
     "RAIN WATER": 0.0015,
